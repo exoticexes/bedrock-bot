@@ -9,15 +9,22 @@ app.listen(port, () => console.log('Web sunucusu hazir.'));
 function startBot() {
   console.log('Sunucuya baglaniliyor...');
   const client = bedrock.createClient({
-    host: '46.4.101.93', // Örn: ornek.aternos.me
-    port: 27056,            // Sunucunun Bedrock portu
+    host: 'mertsel.mc.mcfreehost.com', // Sunucu adresin
+    port: 27056,                       // Portun
     username: 'AFK_Bot_724',
-    offline: true
+    offline: true,                     // Sunucu Online Mode kapalıysa bu true kalmalı
+    version: '1.26.44'                 // Kütüphane sürümü 1.26.44 kabul eder, bu değer yeterlidir
   });
 
-  client.on('join', () => console.log('Bot oyuna girdi!'));
-  client.on('disconnect', () => setTimeout(startBot, 10000));
-  client.on('error', () => setTimeout(startBot, 10000));
+  client.on('join', () => console.log('Bot oyuna basariyla girdi!'));
+  client.on('disconnect', (packet) => {
+    console.log('Baglanti koptu. Sunucu ayarlarini (Online Mode/Whitelist) kontrol et!', packet);
+    setTimeout(startBot, 10000); // 10 saniye sonra tekrar dene
+  });
+  client.on('error', (err) => {
+    console.log('Hata:', err);
+    setTimeout(startBot, 10000);
+  });
 }
 
 startBot();

@@ -12,7 +12,8 @@ app.use((req, res, next) => {
 });
 
 app.get('/api/status', (req, res) => {
-  if (isServerOnline && onlinePlayers.size === 0) {
+  // Bot aktifse listede Pis_Fakir her zaman dursun
+  if (isServerOnline && !onlinePlayers.has('bot-id')) {
     onlinePlayers.set('bot-id', 'Pis_Fakir');
   }
 
@@ -38,30 +39,39 @@ function startBot() {
   client.on('join', () => {
     isServerOnline = true;
     onlinePlayers.set('bot-id', 'Pis_Fakir');
-    console.log('Pis_Fakir sunucuya girdi.');
+    console.log('>>> Bot sunucuya girdi: Pis_Fakir');
   });
 
-  // Gelen ve giden tüm oyuncu paketlerini esnek sekilde yakaliyoruz
+  // 1. Yontem: Oyuncu listesi paketlerini dinle (name ve username kontrollu)
   client.on('player_list', (packet) => {
     if (!packet.records || !packet.records.records) return;
-    
     const type = String(packet.records.type).toLowerCase();
 
-    if (type.includes('add')) {
-      packet.records.records.forEach(p => {
-        if (p.username) {
-          onlinePlayers.set(p.uuid || p.username, p.username);
-          console.log('Oyuncu katildi:', p.username);
-        }
-      });
-    } else if (type.includes('remove')) {
-      packet.records.records.forEach(p => {
-        const id = p.uuid || p.username;
-        if (id && onlinePlayers.get(id) !== 'Pis_Fakir') {
-          console.log('Oyuncu ayrildi:', onlinePlayers.get(id));
+    packet.records.records.forEach(p => {
+      const name = p.username || p.name;
+      const id = p.uuid || name;
+
+      if (type.includes('add') && name) {
+        onlinePlayers.set(id, name);
+        console.log('>>> [Oyuncu Katildi]:', name);
+      } else if (type.includes('remove') && id) {
+        if (onlinePlayers.get(id) !== 'Pis_Fakir') {
+          console.log('>>> [Oyuncu Ayrildi]:', onlinePlayers.get(id));
           onlinePlayers.delete(id);
         }
-      });
+      }
+    });
+  });
+
+  // 2. Yontem: Sohbet / Sistem mesajlarindan katilimlari yakala
+  client.on('text', (packet) => {
+    const msg = packet.message || '';
+    if (msg.includes('joined the game') || msg.includes('oyuna katildi')) {
+      const name = msg.split(' ')[0];
+      if (name && name !== 'Pis_Fakir') {
+        onlinePlayers.set(name, name);
+        console.log('>>> [Sistemden Yakalandi]:', name);
+      }
     }
   });
 
@@ -71,7 +81,8 @@ function startBot() {
     setTimeout(startBot, 15000);
   });
 
-  client.on('error', () => {
+  client.on('error', (err) => {
+    console.log('Bot Hata:', err);
     isServerOnline = false;
     onlinePlayers.clear();
     setTimeout(startBot, 15000);

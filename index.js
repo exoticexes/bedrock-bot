@@ -27,8 +27,6 @@ app.get('/', (req, res) => res.send('Bot ve API Aktif!'));
 app.listen(port);
 
 function startBot() {
-  console.log('[BOT] Sunucuya baglaniliyor...');
-  
   const client = bedrock.createClient({
     host: '46.4.101.93',
     port: 27056,
@@ -39,42 +37,31 @@ function startBot() {
   client.on('join', () => {
     isServerOnline = true;
     onlinePlayers.set('bot-id', 'Pis_Fakir');
-    console.log('[BOT] Oyuna basariyla girdi: Pis_Fakir');
+    console.log('[BOT] Oyunda: Pis_Fakir');
   });
 
-  // 1. YONTEM: Haritada beliren oyuncu paketi (Bedrock ana yakalama yontemi)
-  client.on('add_player', (packet) => {
-    const name = packet.username;
-    if (name && name !== 'Pis_Fakir') {
-      onlinePlayers.set(packet.uuid || name, name);
-      console.log('>>> [OYUNCU KATILDI - ADD_PLAYER]:', name);
-    }
-  });
-
-  // 2. YONTEM: Tab listesi paketi
-  client.on('player_list', (packet) => {
-    if (!packet.records || !packet.records.records) return;
-    const type = String(packet.records.type).toLowerCase();
-
-    packet.records.records.forEach(p => {
-      const name = p.username || p.name;
-      if (!name) return;
-      const id = p.uuid || name;
-
-      if (type.includes('add') && name !== 'Pis_Fakir') {
-        onlinePlayers.set(id, name);
-        console.log('>>> [OYUNCU KATILDI - PLAYER_LIST]:', name);
-      } else if (type.includes('remove') && id !== 'bot-id') {
-        onlinePlayers.delete(id);
-        console.log('>>> [OYUNCU AYRILDI]:', name);
-      }
-    });
-  });
-
-  // 3. YONTEM: Sunucudan gelen tum yazilari loga bas (Test icin)
+  // Bedrock sistem mesajlarindaki gizli parameters verisinden oyuncu yakalama
   client.on('text', (packet) => {
-    if (packet.message) {
-      console.log('[SUNUCU MESAJI]:', packet.message);
+    const msg = packet.message || '';
+    const params = packet.parameters || [];
+    const playerName = params[0];
+
+    // Oyuncu katilma mesajı (%multiplayer.player.joined)
+    if (msg.includes('joined') || msg.includes('katildi')) {
+      const name = playerName || msg.split(' ')[0];
+      if (name && name !== 'Pis_Fakir') {
+        onlinePlayers.set(name, name);
+        console.log('[OYUNCU KATILDI]:', name);
+      }
+    }
+
+    // Oyuncu ayrilma mesajı (%multiplayer.player.left)
+    if (msg.includes('left') || msg.includes('ayrildi')) {
+      const name = playerName || msg.split(' ')[0];
+      if (name && name !== 'Pis_Fakir') {
+        onlinePlayers.delete(name);
+        console.log('[OYUNCU AYRILDI]:', name);
+      }
     }
   });
 
@@ -84,8 +71,7 @@ function startBot() {
     setTimeout(startBot, 10000);
   });
 
-  client.on('error', (err) => {
-    console.log('[BOT HATA]:', err.message || err);
+  client.on('error', () => {
     isServerOnline = false;
     onlinePlayers.clear();
     setTimeout(startBot, 10000);

@@ -3,67 +3,66 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-let onlinePlayers = new Map(); // Oyuncuları ID (UUID) ile tutacağız
-let isServerOnline = false;
+let isBotConnected = false;
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   next();
 });
 
-app.get('/api/status', (req, res) => {
-  res.json({
-    online: isServerOnline,
-    playerCount: onlinePlayers.size,
-    players: Array.from(onlinePlayers.values())
-  });
-});
-
-app.get('/', (req, res) => res.send('Bot aktif.'));
-app.listen(port);
-
+// AFK Bot Sunucuda 7/24 Kalır
 function startBot() {
+  console.log('[BOT] Sunucuya baglaniliyor...');
   const client = bedrock.createClient({
     host: '46.4.101.93',
     port: 27056,
-    username: 'Pis_Fakir', // Botun adı
+    username: 'Pis_Fakir',
     offline: true
   });
 
   client.on('join', () => {
-    isServerOnline = true;
-    console.log('[BOT] Sunucuya girdi.');
-  });
-
-  // TEK GERÇEK YÖNTEM: Player List paketleri
-  client.on('player_list', (packet) => {
-    if (!packet.records || !packet.records.records) return;
-
-    packet.records.records.forEach(record => {
-      // Botun kendisini listeye eklemiyoruz
-      if (record.username === 'Pis_Fakir') return;
-
-      if (packet.records.type === 'add') {
-        onlinePlayers.set(record.uuid, record.username);
-        console.log('[+] Eklendi:', record.username);
-      } else if (packet.records.type === 'remove') {
-        onlinePlayers.delete(record.uuid);
-        console.log('[-] Silindi:', record.username);
-      }
-    });
+    isBotConnected = true;
+    console.log('[BOT] Pis_Fakir oyunda!');
   });
 
   client.on('disconnect', () => {
-    isServerOnline = false;
-    onlinePlayers.clear();
+    isBotConnected = false;
     setTimeout(startBot, 10000);
   });
 
   client.on('error', () => {
-    isServerOnline = false;
-    onlinePlayers.clear();
+    isBotConnected = false;
     setTimeout(startBot, 10000);
   });
 }
 
 startBot();
+
+// API: Oyuncu sayisini dogrudan RakNet Ping ile anlik ceker
+app.get('/api/status', async (req, res) => {
+  try {
+    const pingResult = await bedrock.ping({
+      host: '46.4.101.93',
+      port: 27056,
+      timeout: 3000
+    });
+
+    const realPlayerCount = parseInt(pingResult.playersOnline || 0);
+
+    res.json({
+      online: true,
+      playerCount: realPlayerCount,
+      players: realPlayerCount > 0 ? ['Pis_Fakir', ...Array(Math.max(0, realPlayerCount - 1)).fill('Aktif Oyuncu')] : []
+    });
+  } catch (err) {
+    // Ping zaman asimina ugrarsa bot durumuna gore cevap ver
+    res.json({
+      online: isBotConnected,
+      playerCount: isBotConnected ? 1 : 0,
+      players: isBotConnected ? ['Pis_Fakir'] : []
+    });
+  }
+});
+
+app.get('/', (req, res) => res.send('Bot ve API Aktif!'));
+app.listen(port);

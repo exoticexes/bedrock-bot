@@ -12,7 +12,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/api/status', (req, res) => {
-  if (isServerOnline && onlinePlayers.size === 0) {
+  if (isServerOnline && !onlinePlayers.has('bot-id')) {
     onlinePlayers.set('bot-id', 'Pis_Fakir');
   }
 
@@ -24,70 +24,72 @@ app.get('/api/status', (req, res) => {
 });
 
 app.get('/', (req, res) => res.send('Bot ve API Aktif!'));
-
-app.listen(port, () => {
-  console.log(`[SISTEM] Web sunucu ${port} portunda baslatildi.`);
-  startBot();
-});
+app.listen(port);
 
 function startBot() {
-  console.log('[BOT] Sunucuya baglanma denemesi baslatiliyor...');
+  console.log('[BOT] Sunucuya baglaniliyor...');
   
-  try {
-    const client = bedrock.createClient({
-      host: '46.4.101.93',
-      port: 27056,
-      username: 'Pis_Fakir',
-      offline: true,
-      connectTimeout: 10000
+  const client = bedrock.createClient({
+    host: '46.4.101.93',
+    port: 27056,
+    username: 'Pis_Fakir',
+    offline: true
+  });
+
+  client.on('join', () => {
+    isServerOnline = true;
+    onlinePlayers.set('bot-id', 'Pis_Fakir');
+    console.log('[BOT] Oyuna basariyla girdi: Pis_Fakir');
+  });
+
+  // 1. YONTEM: Haritada beliren oyuncu paketi (Bedrock ana yakalama yontemi)
+  client.on('add_player', (packet) => {
+    const name = packet.username;
+    if (name && name !== 'Pis_Fakir') {
+      onlinePlayers.set(packet.uuid || name, name);
+      console.log('>>> [OYUNCU KATILDI - ADD_PLAYER]:', name);
+    }
+  });
+
+  // 2. YONTEM: Tab listesi paketi
+  client.on('player_list', (packet) => {
+    if (!packet.records || !packet.records.records) return;
+    const type = String(packet.records.type).toLowerCase();
+
+    packet.records.records.forEach(p => {
+      const name = p.username || p.name;
+      if (!name) return;
+      const id = p.uuid || name;
+
+      if (type.includes('add') && name !== 'Pis_Fakir') {
+        onlinePlayers.set(id, name);
+        console.log('>>> [OYUNCU KATILDI - PLAYER_LIST]:', name);
+      } else if (type.includes('remove') && id !== 'bot-id') {
+        onlinePlayers.delete(id);
+        console.log('>>> [OYUNCU AYRILDI]:', name);
+      }
     });
+  });
 
-    client.on('connect', () => {
-      console.log('[BOT] Sunucuyla UDP baglantisi kuruldu, paketler bekleniyor...');
-    });
+  // 3. YONTEM: Sunucudan gelen tum yazilari loga bas (Test icin)
+  client.on('text', (packet) => {
+    if (packet.message) {
+      console.log('[SUNUCU MESAJI]:', packet.message);
+    }
+  });
 
-    client.on('join', () => {
-      isServerOnline = true;
-      onlinePlayers.set('bot-id', 'Pis_Fakir');
-      console.log('[BOT] Oyuna basariyla giris yapildi: Pis_Fakir');
-    });
-
-    client.on('player_list', (packet) => {
-      if (!packet.records || !packet.records.records) return;
-      const type = String(packet.records.type).toLowerCase();
-
-      packet.records.records.forEach(p => {
-        const name = p.username || p.name;
-        const id = p.uuid || name;
-
-        if (type.includes('add') && name) {
-          onlinePlayers.set(id, name);
-          console.log('[OYUNCU KATILDI]:', name);
-        } else if (type.includes('remove') && id) {
-          if (onlinePlayers.get(id) !== 'Pis_Fakir') {
-            console.log('[OYUNCU AYRILDI]:', onlinePlayers.get(id));
-            onlinePlayers.delete(id);
-          }
-        }
-      });
-    });
-
-    client.on('disconnect', (reason) => {
-      console.log('[BOT] Baglanti kesildi. Sebeb:', JSON.stringify(reason));
-      isServerOnline = false;
-      onlinePlayers.clear();
-      setTimeout(startBot, 10000);
-    });
-
-    client.on('error', (err) => {
-      console.log('[BOT HATA]:', err.message || err);
-      isServerOnline = false;
-      onlinePlayers.clear();
-      setTimeout(startBot, 10000);
-    });
-
-  } catch (err) {
-    console.log('[CRITICAL HATA]:', err);
+  client.on('disconnect', () => {
+    isServerOnline = false;
+    onlinePlayers.clear();
     setTimeout(startBot, 10000);
-  }
+  });
+
+  client.on('error', (err) => {
+    console.log('[BOT HATA]:', err.message || err);
+    isServerOnline = false;
+    onlinePlayers.clear();
+    setTimeout(startBot, 10000);
+  });
 }
+
+startBot();

@@ -3,17 +3,21 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-let onlinePlayers = new Map(); // Oyuncu listesini tutacağımız alan
+let onlinePlayers = new Map();
 let isServerOnline = false;
 
-// Lovable sitesinin engellenmeden veri çekebilmesi için CORS izni
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   next();
 });
 
-// Lovable sitesinin okuyacağı özel API adresimiz
+// API Istegi
 app.get('/api/status', (req, res) => {
+  // Bot oyundaysa ve liste bossa Pis_Fakir'i garanti olarak ekle
+  if (isServerOnline && onlinePlayers.size === 0) {
+    onlinePlayers.set('bot-id', 'Pis_Fakir');
+  }
+
   res.json({
     online: isServerOnline,
     playerCount: onlinePlayers.size,
@@ -35,10 +39,10 @@ function startBot() {
 
   client.on('join', () => {
     isServerOnline = true;
-    console.log('Bot oyuna girdi, oyuncular izleniyor.');
+    onlinePlayers.set('bot-id', 'Pis_Fakir');
+    console.log('Pis_Fakir sunucuya girdi.');
   });
 
-  // Oyunda kim var kim yok paketlerini canlı dinliyoruz
   client.on('player_list', (packet) => {
     if (!packet.records) return;
     
@@ -48,7 +52,10 @@ function startBot() {
       });
     } else if (packet.records.type === 'remove') {
       packet.records.records.forEach(p => {
-        onlinePlayers.delete(p.uuid || p.username);
+        const id = p.uuid || p.username;
+        if (id && onlinePlayers.get(id) !== 'Pis_Fakir') {
+          onlinePlayers.delete(id);
+        }
       });
     }
   });

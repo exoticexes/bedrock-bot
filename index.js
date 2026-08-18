@@ -3,34 +3,67 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.get('/', (req, res) => res.send('Bot aktif.'));
-app.listen(port, () => console.log('Web sunucusu calisiyor.'));
+let onlinePlayers = new Map(); // Oyuncu listesini tutacağımız alan
+let isServerOnline = false;
+
+// Lovable sitesinin engellenmeden veri çekebilmesi için CORS izni
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  next();
+});
+
+// Lovable sitesinin okuyacağı özel API adresimiz
+app.get('/api/status', (req, res) => {
+  res.json({
+    online: isServerOnline,
+    playerCount: onlinePlayers.size,
+    players: Array.from(onlinePlayers.values())
+  });
+});
+
+app.get('/', (req, res) => res.send('Bot ve API Aktif!'));
+app.listen(port);
 
 function startBot() {
   console.log('Sunucuya baglaniliyor...');
+  const client = bedrock.createClient({
+    host: '46.4.101.93',
+    port: 27056,
+    username: 'Pis_Fakir',
+    offline: true
+  });
 
-  try {
-    const client = bedrock.createClient({
-      host: '46.4.101.93',
-      port: 27056,
-      username: 'Mert_Server',
-      offline: true,
-      skipPing: false // Sürümü otomatik tespit etmesi için ping atmasını sağlıyoruz
-    });
+  client.on('join', () => {
+    isServerOnline = true;
+    console.log('Bot oyuna girdi, oyuncular izleniyor.');
+  });
 
-    client.on('join', () => console.log('Basariyla girildi!'));
-    client.on('disconnect', (packet) => {
-      console.log('Baglanti koptu:', packet);
-      setTimeout(startBot, 15000);
-    });
-    client.on('error', (err) => {
-      console.log('Hata:', err.message || err);
-      setTimeout(startBot, 15000);
-    });
-  } catch (e) {
-    console.log('Baslatma hatasi:', e.message);
+  // Oyunda kim var kim yok paketlerini canlı dinliyoruz
+  client.on('player_list', (packet) => {
+    if (!packet.records) return;
+    
+    if (packet.records.type === 'add') {
+      packet.records.records.forEach(p => {
+        if (p.username) onlinePlayers.set(p.uuid || p.username, p.username);
+      });
+    } else if (packet.records.type === 'remove') {
+      packet.records.records.forEach(p => {
+        onlinePlayers.delete(p.uuid || p.username);
+      });
+    }
+  });
+
+  client.on('disconnect', () => {
+    isServerOnline = false;
+    onlinePlayers.clear();
     setTimeout(startBot, 15000);
-  }
+  });
+
+  client.on('error', () => {
+    isServerOnline = false;
+    onlinePlayers.clear();
+    setTimeout(startBot, 15000);
+  });
 }
 
 startBot();

@@ -11,9 +11,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// API Istegi
 app.get('/api/status', (req, res) => {
-  // Bot oyundaysa ve liste bossa Pis_Fakir'i garanti olarak ekle
   if (isServerOnline && onlinePlayers.size === 0) {
     onlinePlayers.set('bot-id', 'Pis_Fakir');
   }
@@ -43,17 +41,24 @@ function startBot() {
     console.log('Pis_Fakir sunucuya girdi.');
   });
 
+  // Gelen ve giden tüm oyuncu paketlerini esnek sekilde yakaliyoruz
   client.on('player_list', (packet) => {
-    if (!packet.records) return;
+    if (!packet.records || !packet.records.records) return;
     
-    if (packet.records.type === 'add') {
+    const type = String(packet.records.type).toLowerCase();
+
+    if (type.includes('add')) {
       packet.records.records.forEach(p => {
-        if (p.username) onlinePlayers.set(p.uuid || p.username, p.username);
+        if (p.username) {
+          onlinePlayers.set(p.uuid || p.username, p.username);
+          console.log('Oyuncu katildi:', p.username);
+        }
       });
-    } else if (packet.records.type === 'remove') {
+    } else if (type.includes('remove')) {
       packet.records.records.forEach(p => {
         const id = p.uuid || p.username;
         if (id && onlinePlayers.get(id) !== 'Pis_Fakir') {
+          console.log('Oyuncu ayrildi:', onlinePlayers.get(id));
           onlinePlayers.delete(id);
         }
       });

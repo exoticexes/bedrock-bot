@@ -1,3 +1,4 @@
+require('./backup.js');
 const bedrock = require('bedrock-protocol');
 const express = require('express');
 const app = express();

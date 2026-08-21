@@ -1,4 +1,4 @@
-require('./backup.js'); // Yedekleme dosyanı tetikler (Eğer yoksa bu satırı silebilirsin)
+require('./backup.js');
 
 const bedrock = require('bedrock-protocol');
 const express = require('express');
@@ -6,7 +6,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 let activePlayers = new Set(['Pis_Fakir']);
-let vurmaZamani = null; // Farm döngüsünü kontrol eden zamanlayıcı
+let vurmaZamani = null; // Farm vurma zamanlayıcısı
 
 function startBot() {
   console.log('[BOT] Baglaniliyor...');
@@ -45,11 +45,10 @@ function startBot() {
     const lowerMsg = msg.trim().toLowerCase();
     const pName = packet.parameters ? packet.parameters[0] : null;
 
-    // --- FARM KOMUT DİNLEYİCİSİ ---
+    // --- FARM DÖNGÜSÜ ---
     if (lowerMsg === '!farm') {
       if (vurmaZamani) clearInterval(vurmaZamani);
       console.log('[FARM] Bot kılıç sallamaya başladı.');
-      
       vurmaZamani = setInterval(() => {
         client.queue('animate', {
           action_id: 1, // Kılıç sallama animasyonu
@@ -65,7 +64,7 @@ function startBot() {
         console.log('[FARM] Bot vurmayı durdurdu.');
       }
     }
-    // ------------------------------
+    // ---------------------
 
     if (pName && pName !== 'Pis_Fakir') {
       if (msg.includes('joined') || msg.includes('katildi')) {

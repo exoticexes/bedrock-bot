@@ -5,7 +5,8 @@ const port = process.env.PORT || 3000;
 
 let activePlayers = new Set(['Pis_Fakir']);
 let vurmaZamani = null;
-let bakisYawi = 270; // Botun bakacağı varsayılan yön açısı
+let bakisYawi = 0;
+let botPos = { x: 0, y: 0, z: 0 }; // Botun sunucudaki anlık konumu
 
 function startBot() {
   console.log('[BOT] Baglaniliyor...');
@@ -21,7 +22,20 @@ function startBot() {
     activePlayers.add('Pis_Fakir');
   });
 
-  // 1. Tab listesinden isim yakalama
+  // Sunucudan gelen bot koordinatlarını canlı yakalar
+  client.on('move_player', (packet) => {
+    if (packet.runtime_entity_id === client.entityId && packet.position) {
+      botPos = packet.position;
+    }
+  });
+
+  client.on('start_game', (packet) => {
+    if (packet.player_position) {
+      botPos = packet.player_position;
+    }
+  });
+
+  // 1. Tab listesinden oyuncu takibi
   client.on('player_list', (packet) => {
     if (!packet.records || !packet.records.records) return;
     packet.records.records.forEach(r => {
@@ -38,7 +52,7 @@ function startBot() {
     });
   });
 
-  // 2. Chat / Sistem bildiriminden isim yakalama
+  // 2. Chat / Sistem bildiriminden oyuncu takibi
   client.on('text', (packet) => {
     const msg = packet.message || '';
     const pName = packet.parameters ? packet.parameters[0] : null;
@@ -55,40 +69,54 @@ function startBot() {
     }
   });
 
-  // 3. Farm Komutları ve Yön Kontrolü
+  // 3. Farm Komutları ve Yön Dinleyicisi
   client.on('text', (packet) => {
-    let chatContent = packet.message || '';
-    if (packet.parameters && packet.parameters[1]) {
-      chatContent = packet.parameters[1];
+    let rawText = packet.message || '';
+    if (packet.parameters && Array.isArray(packet.parameters)) {
+      rawText += ' ' + packet.parameters.join(' ');
     }
 
-    const lowerMsg = chatContent.trim().toLowerCase();
+    const cleanMsg = rawText.replace(/§[0-9a-fk-or]/gi, '').toLowerCase();
 
-    // Sohbet üzerinden yön değiştirme
-    if (lowerMsg === '!sol') bakisYawi = (bakisYawi + 270) % 360;
-    if (lowerMsg === '!sag') bakisYawi = (bakisYawi + 90) % 360;
-    if (lowerMsg === '!don') bakisYawi = (bakisYawi + 180) % 360;
+    // Derece ile döndürme (Örn: !bak 90, !bak 180, !bak 270)
+    if (cleanMsg.includes('!bak')) {
+      const match = cleanMsg.match(/!bak\s*(\d+)/);
+      if (match && match[1]) {
+        bakisYawi = parseInt(match[1]) % 360;
+        console.log(`[YÖN] Bot açısı ${bakisYawi} derece yapıldı.`);
+      }
+    }
 
-    if (lowerMsg === '!farm') {
+    // 45 Derecelik hassas adımlarla döndürme
+    if (cleanMsg.includes('!sol')) {
+      bakisYawi = (bakisYawi + 315) % 360;
+      console.log('[YÖN] Sola döndü. Yeni Açı:', bakisYawi);
+    }
+    if (cleanMsg.includes('!sag')) {
+      bakisYawi = (bakisYawi + 45) % 360;
+      console.log('[YÖN] Sağa döndü. Yeni Açı:', bakisYawi);
+    }
+
+    // Farm Başlat
+    if (cleanMsg.includes('!farm')) {
       if (vurmaZamani) clearInterval(vurmaZamani);
       console.log('[FARM] Bot kılıç sallamaya başladı.');
-      
+
       vurmaZamani = setInterval(() => {
-        // Botun vücudunu ve kafasını belirlenen açıya kilitler
+        // Gerçek konumu ve yeni açıyı sunucuya basar
         client.queue('move_player', {
           runtime_entity_id: client.entityId,
-          position: client.pos || { x: 0, y: 0, z: 0 },
-          pitch: 20,            // Hafif aşağı bakış (Slab altına/huninin üstüne vurması için)
-          yaw: bakisYawi,       // Ayarlanan bakış açısı
-          head_yaw: bakisYawi,  // Kafa açısı
+          position: botPos,
+          pitch: 25,            // Slab altına/huninin üstüne bakış
+          yaw: bakisYawi,       // İstenen yön açısı
+          head_yaw: bakisYawi,
           mode: 'normal',
           on_ground: true,
-          riding_entity_runtime_id: 0,
+          riding_entity_runtime_id: 0n,
           teleport_cause: 0,
           teleport_source_entity_type: 0
         });
 
-        // Kılıç sallama
         client.queue('animate', {
           action_id: 1,
           runtime_entity_id: client.entityId
@@ -96,7 +124,8 @@ function startBot() {
       }, 500);
     }
 
-    if (lowerMsg === '!dur') {
+    // Farm Durdur
+    if (cleanMsg.includes('!dur')) {
       if (vurmaZamani) {
         clearInterval(vurmaZamani);
         vurmaZamani = null;

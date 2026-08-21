@@ -5,10 +5,11 @@ const port = process.env.PORT || 3000;
 
 let activePlayers = new Set(['Pis_Fakir']);
 let vurmaZamani = null;
+let bakisYawi = 0;
+let botPos = { x: 0, y: 0, z: 0 };
 let client = null;
 
 function startBot() {
-  // Eski bağlantı soketi varsa tamamen kapat ve sıfırla
   if (client) {
     try { client.close(); } catch (e) {}
     client = null;
@@ -27,7 +28,20 @@ function startBot() {
     activePlayers.add('Pis_Fakir');
   });
 
-  // 1. Tab listesinden oyuncu takibi (Pis_Fakir ve türevlerini listeden hariç tutar)
+  // Sunucudan botun anlık gerçek koordinatlarını yakalama
+  client.on('move_player', (packet) => {
+    if (packet.runtime_entity_id === client.entityId && packet.position) {
+      botPos = packet.position;
+    }
+  });
+
+  client.on('start_game', (packet) => {
+    if (packet.player_position) {
+      botPos = packet.player_position;
+    }
+  });
+
+  // 1. Tab listesinden oyuncu takibi
   client.on('player_list', (packet) => {
     if (!packet.records || !packet.records.records) return;
     packet.records.records.forEach(r => {
@@ -61,7 +75,33 @@ function startBot() {
     }
   });
 
-  // 3. Farm Komut Dinleyicisi
+  // Güvenli yön değiştirme fonksiyonu (Kick yememesi için tek seferlik gönderir)
+  function yonDegistir(yeniYaw) {
+    bakisYawi = yeniYaw % 360;
+    if (botPos.x !== 0 || botPos.y !== 0 || botPos.z !== 0) {
+      try {
+        client.queue('move_player', {
+          runtime_entity_id: client.entityId,
+          position: botPos,
+          pitch: 25,             // Slab/Huni hizasına bakış
+          yaw: bakisYawi,
+          head_yaw: bakisYawi,
+          mode: 'normal',
+          on_ground: true,
+          riding_entity_runtime_id: 0n,
+          teleport_cause: 0,
+          teleport_source_entity_type: 0
+        });
+        console.log(`[YÖN] Bot ${bakisYawi} derece açısına döndürüldü.`);
+      } catch (e) {
+        console.log('[YÖN HATA]:', e.message);
+      }
+    } else {
+      console.log('[YÖN] Bot konumu henüz sunucudan alınamadı, 1-2 saniye sonra tekrar dene.');
+    }
+  }
+
+  // 3. Farm ve Yön Komut Dinleyicisi
   client.on('text', (packet) => {
     let rawText = packet.message || '';
     if (packet.parameters && Array.isArray(packet.parameters)) {
@@ -69,6 +109,19 @@ function startBot() {
     }
 
     const cleanMsg = rawText.replace(/§[0-9a-fk-or]/gi, '').toLowerCase();
+
+    // Manuel Derece İle Yön Değiştirme
+    if (cleanMsg.includes('!bak')) {
+      const match = cleanMsg.match(/!bak\s*(\d+)/);
+      if (match && match[1]) {
+        yonDegistir(parseInt(match[1]));
+      }
+    }
+
+    // Pratik Yön Komutları
+    if (cleanMsg.includes('!sol')) yonDegistir(bakisYawi + 270);
+    if (cleanMsg.includes('!sag')) yonDegistir(bakisYawi + 90);
+    if (cleanMsg.includes('!don')) yonDegistir(bakisYawi + 180);
 
     // Farm Başlat
     if (cleanMsg.includes('!farm')) {
@@ -102,7 +155,7 @@ function startBot() {
   client.on('disconnect', () => {
     if (vurmaZamani) { clearInterval(vurmaZamani); vurmaZamani = null; }
     console.log('[BOT] Baglanti kesildi, sunucunun eski oturumu düşürmesi bekleniyor (15sn)...');
-    setTimeout(startBot, 15000); // Sunucunun hayalet oturumu temizlemesi için 15sn bekleme
+    setTimeout(startBot, 15000);
   });
 
   client.on('error', (err) => {

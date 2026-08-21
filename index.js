@@ -1,12 +1,10 @@
-require('./backup.js');
-
 const bedrock = require('bedrock-protocol');
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
 let activePlayers = new Set(['Pis_Fakir']);
-let vurmaZamani = null; // Farm vurma zamanlayıcısı
+let vurmaZamani = null;
 
 function startBot() {
   console.log('[BOT] Baglaniliyor...');
@@ -22,7 +20,7 @@ function startBot() {
     activePlayers.add('Pis_Fakir');
   });
 
-  // 1. Tab listesinden isim yakalama ve loga basma
+  // Tab listesinden isim yakalama
   client.on('player_list', (packet) => {
     if (!packet.records || !packet.records.records) return;
     packet.records.records.forEach(r => {
@@ -39,22 +37,22 @@ function startBot() {
     });
   });
 
-  // 2. Chat / Sistem bildiriminden isim yakalama ve Farm komutları
+  // Chat/Sistem bildirimi ve Farm komutları
   client.on('text', (packet) => {
     const msg = packet.message || '';
     const lowerMsg = msg.trim().toLowerCase();
     const pName = packet.parameters ? packet.parameters[0] : null;
 
-    // --- FARM DÖNGÜSÜ ---
+    // --- FARM KOMUTLARI ---
     if (lowerMsg === '!farm') {
       if (vurmaZamani) clearInterval(vurmaZamani);
       console.log('[FARM] Bot kılıç sallamaya başladı.');
       vurmaZamani = setInterval(() => {
         client.queue('animate', {
-          action_id: 1, // Kılıç sallama animasyonu
+          action_id: 1,
           runtime_entity_id: client.entityId
         });
-      }, 500); // 0.5 saniyede bir vurur
+      }, 500);
     }
 
     if (lowerMsg === '!dur') {
@@ -64,7 +62,7 @@ function startBot() {
         console.log('[FARM] Bot vurmayı durdurdu.');
       }
     }
-    // ---------------------
+    // ----------------------
 
     if (pName && pName !== 'Pis_Fakir') {
       if (msg.includes('joined') || msg.includes('katildi')) {

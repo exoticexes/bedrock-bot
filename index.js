@@ -1,9 +1,12 @@
+require('./backup.js'); // Yedekleme dosyanı tetikler (Eğer yoksa bu satırı silebilirsin)
+
 const bedrock = require('bedrock-protocol');
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
 let activePlayers = new Set(['Pis_Fakir']);
+let vurmaZamani = null; // Farm döngüsünü kontrol eden zamanlayıcı
 
 function startBot() {
   console.log('[BOT] Baglaniliyor...');
@@ -36,10 +39,33 @@ function startBot() {
     });
   });
 
-  // 2. Chat / Sistem bildiriminden isim yakalama ve loga basma
+  // 2. Chat / Sistem bildiriminden isim yakalama ve Farm komutları
   client.on('text', (packet) => {
     const msg = packet.message || '';
+    const lowerMsg = msg.trim().toLowerCase();
     const pName = packet.parameters ? packet.parameters[0] : null;
+
+    // --- FARM KOMUT DİNLEYİCİSİ ---
+    if (lowerMsg === '!farm') {
+      if (vurmaZamani) clearInterval(vurmaZamani);
+      console.log('[FARM] Bot kılıç sallamaya başladı.');
+      
+      vurmaZamani = setInterval(() => {
+        client.queue('animate', {
+          action_id: 1, // Kılıç sallama animasyonu
+          runtime_entity_id: client.entityId
+        });
+      }, 500); // 0.5 saniyede bir vurur
+    }
+
+    if (lowerMsg === '!dur') {
+      if (vurmaZamani) {
+        clearInterval(vurmaZamani);
+        vurmaZamani = null;
+        console.log('[FARM] Bot vurmayı durdurdu.');
+      }
+    }
+    // ------------------------------
 
     if (pName && pName !== 'Pis_Fakir') {
       if (msg.includes('joined') || msg.includes('katildi')) {
@@ -54,11 +80,13 @@ function startBot() {
   });
 
   client.on('disconnect', () => {
+    if (vurmaZamani) { clearInterval(vurmaZamani); vurmaZamani = null; }
     console.log('[BOT] Baglanti kesildi, tekrar deneniyor...');
     setTimeout(startBot, 10000);
   });
 
   client.on('error', (err) => {
+    if (vurmaZamani) { clearInterval(vurmaZamani); vurmaZamani = null; }
     console.log('[BOT HATA]:', err.message || err);
     setTimeout(startBot, 10000);
   });

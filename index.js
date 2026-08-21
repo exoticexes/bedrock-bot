@@ -28,9 +28,9 @@ function startBot() {
     activePlayers.add('Pis_Fakir');
   });
 
-  // Sunucudan botun anlık gerçek koordinatlarını yakalama
+  // Sunucudan gelen konum paketlerini engelsiz yakalama
   client.on('move_player', (packet) => {
-    if (packet.runtime_entity_id === client.entityId && packet.position) {
+    if (packet.position) {
       botPos = packet.position;
     }
   });
@@ -75,11 +75,11 @@ function startBot() {
     }
   });
 
-  // Güvenli yön değiştirme fonksiyonu (Kick yememesi için tek seferlik gönderir)
+  // Dönüş Paketi Gönderici
   function yonDegistir(yeniYaw) {
-    bakisYawi = yeniYaw % 360;
-    if (botPos.x !== 0 || botPos.y !== 0 || botPos.z !== 0) {
-      try {
+    bakisYawi = Number(yeniYaw) % 360;
+    try {
+      if (client) {
         client.queue('move_player', {
           runtime_entity_id: client.entityId,
           position: botPos,
@@ -93,11 +93,9 @@ function startBot() {
           teleport_source_entity_type: 0
         });
         console.log(`[YÖN] Bot ${bakisYawi} derece açısına döndürüldü.`);
-      } catch (e) {
-        console.log('[YÖN HATA]:', e.message);
       }
-    } else {
-      console.log('[YÖN] Bot konumu henüz sunucudan alınamadı, 1-2 saniye sonra tekrar dene.');
+    } catch (e) {
+      console.log('[YÖN HATA]:', e.message);
     }
   }
 
@@ -110,7 +108,7 @@ function startBot() {
 
     const cleanMsg = rawText.replace(/§[0-9a-fk-or]/gi, '').toLowerCase();
 
-    // Manuel Derece İle Yön Değiştirme
+    // Derece ile Döndürme (!bak 90, !bak 180, !bak 270, !bak 0)
     if (cleanMsg.includes('!bak')) {
       const match = cleanMsg.match(/!bak\s*(\d+)/);
       if (match && match[1]) {
@@ -118,7 +116,7 @@ function startBot() {
       }
     }
 
-    // Pratik Yön Komutları
+    // Yön komutları
     if (cleanMsg.includes('!sol')) yonDegistir(bakisYawi + 270);
     if (cleanMsg.includes('!sag')) yonDegistir(bakisYawi + 90);
     if (cleanMsg.includes('!don')) yonDegistir(bakisYawi + 180);
@@ -132,7 +130,7 @@ function startBot() {
         try {
           if (client) {
             client.queue('animate', {
-              action_id: 1, // Kılıç sallama
+              action_id: 1,
               runtime_entity_id: client.entityId
             });
           }
@@ -154,7 +152,7 @@ function startBot() {
 
   client.on('disconnect', () => {
     if (vurmaZamani) { clearInterval(vurmaZamani); vurmaZamani = null; }
-    console.log('[BOT] Baglanti kesildi, sunucunun eski oturumu düşürmesi bekleniyor (15sn)...');
+    console.log('[BOT] Baglanti kesildi, tekrar deneniyor (15sn)...');
     setTimeout(startBot, 15000);
   });
 

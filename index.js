@@ -5,6 +5,7 @@ const port = process.env.PORT || 3000;
 
 let activePlayers = new Set(['Pis_Fakir']);
 let vurmaZamani = null;
+let bakisYawi = 270; // Botun bakacağı varsayılan yön açısı
 
 function startBot() {
   console.log('[BOT] Baglaniliyor...');
@@ -20,7 +21,7 @@ function startBot() {
     activePlayers.add('Pis_Fakir');
   });
 
-  // 1. Tab listesinden isim yakalama (ORİJİNAL KOD - DEĞİŞTİRİLMEDİ)
+  // 1. Tab listesinden isim yakalama
   client.on('player_list', (packet) => {
     if (!packet.records || !packet.records.records) return;
     packet.records.records.forEach(r => {
@@ -37,7 +38,7 @@ function startBot() {
     });
   });
 
-  // 2. Chat / Sistem bildiriminden isim yakalama (ORİJİNAL KOD - DEĞİŞTİRİLMEDİ)
+  // 2. Chat / Sistem bildiriminden isim yakalama
   client.on('text', (packet) => {
     const msg = packet.message || '';
     const pName = packet.parameters ? packet.parameters[0] : null;
@@ -54,7 +55,7 @@ function startBot() {
     }
   });
 
-  // 3. Farm Komut Dinleyicisi (!farm ve !dur)
+  // 3. Farm Komutları ve Yön Kontrolü
   client.on('text', (packet) => {
     let chatContent = packet.message || '';
     if (packet.parameters && packet.parameters[1]) {
@@ -63,10 +64,31 @@ function startBot() {
 
     const lowerMsg = chatContent.trim().toLowerCase();
 
+    // Sohbet üzerinden yön değiştirme
+    if (lowerMsg === '!sol') bakisYawi = (bakisYawi + 270) % 360;
+    if (lowerMsg === '!sag') bakisYawi = (bakisYawi + 90) % 360;
+    if (lowerMsg === '!don') bakisYawi = (bakisYawi + 180) % 360;
+
     if (lowerMsg === '!farm') {
       if (vurmaZamani) clearInterval(vurmaZamani);
       console.log('[FARM] Bot kılıç sallamaya başladı.');
+      
       vurmaZamani = setInterval(() => {
+        // Botun vücudunu ve kafasını belirlenen açıya kilitler
+        client.queue('move_player', {
+          runtime_entity_id: client.entityId,
+          position: client.pos || { x: 0, y: 0, z: 0 },
+          pitch: 20,            // Hafif aşağı bakış (Slab altına/huninin üstüne vurması için)
+          yaw: bakisYawi,       // Ayarlanan bakış açısı
+          head_yaw: bakisYawi,  // Kafa açısı
+          mode: 'normal',
+          on_ground: true,
+          riding_entity_runtime_id: 0,
+          teleport_cause: 0,
+          teleport_source_entity_type: 0
+        });
+
+        // Kılıç sallama
         client.queue('animate', {
           action_id: 1,
           runtime_entity_id: client.entityId

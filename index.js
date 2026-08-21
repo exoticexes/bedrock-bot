@@ -5,12 +5,17 @@ const port = process.env.PORT || 3000;
 
 let activePlayers = new Set(['Pis_Fakir']);
 let vurmaZamani = null;
-let bakisYawi = 0;
-let botPos = { x: 0, y: 0, z: 0 }; // Botun sunucudaki anlık konumu
+let client = null;
 
 function startBot() {
+  // Eski bağlantı soketi varsa tamamen kapat ve sıfırla
+  if (client) {
+    try { client.close(); } catch (e) {}
+    client = null;
+  }
+
   console.log('[BOT] Baglaniliyor...');
-  const client = bedrock.createClient({
+  client = bedrock.createClient({
     host: '46.4.101.93',
     port: 27056,
     username: 'Pis_Fakir',
@@ -22,24 +27,11 @@ function startBot() {
     activePlayers.add('Pis_Fakir');
   });
 
-  // Sunucudan gelen bot koordinatlarını canlı yakalar
-  client.on('move_player', (packet) => {
-    if (packet.runtime_entity_id === client.entityId && packet.position) {
-      botPos = packet.position;
-    }
-  });
-
-  client.on('start_game', (packet) => {
-    if (packet.player_position) {
-      botPos = packet.player_position;
-    }
-  });
-
-  // 1. Tab listesinden oyuncu takibi
+  // 1. Tab listesinden oyuncu takibi (Pis_Fakir ve türevlerini listeden hariç tutar)
   client.on('player_list', (packet) => {
     if (!packet.records || !packet.records.records) return;
     packet.records.records.forEach(r => {
-      if (r.username && r.username !== 'Pis_Fakir') {
+      if (r.username && !r.username.startsWith('Pis_Fakir')) {
         if (packet.records.type === 'add') {
           activePlayers.add(r.username);
           console.log('[OYUNCU KATILDI - TAB]:', r.username);
@@ -57,7 +49,7 @@ function startBot() {
     const msg = packet.message || '';
     const pName = packet.parameters ? packet.parameters[0] : null;
 
-    if (pName && pName !== 'Pis_Fakir') {
+    if (pName && !pName.startsWith('Pis_Fakir')) {
       if (msg.includes('joined') || msg.includes('katildi')) {
         activePlayers.add(pName);
         console.log('[OYUNCU KATILDI - CHAT]:', pName);
@@ -69,7 +61,7 @@ function startBot() {
     }
   });
 
-  // 3. Farm Komutları ve Yön Dinleyicisi
+  // 3. Farm Komut Dinleyicisi
   client.on('text', (packet) => {
     let rawText = packet.message || '';
     if (packet.parameters && Array.isArray(packet.parameters)) {
@@ -78,49 +70,22 @@ function startBot() {
 
     const cleanMsg = rawText.replace(/§[0-9a-fk-or]/gi, '').toLowerCase();
 
-    // Derece ile döndürme (Örn: !bak 90, !bak 180, !bak 270)
-    if (cleanMsg.includes('!bak')) {
-      const match = cleanMsg.match(/!bak\s*(\d+)/);
-      if (match && match[1]) {
-        bakisYawi = parseInt(match[1]) % 360;
-        console.log(`[YÖN] Bot açısı ${bakisYawi} derece yapıldı.`);
-      }
-    }
-
-    // 45 Derecelik hassas adımlarla döndürme
-    if (cleanMsg.includes('!sol')) {
-      bakisYawi = (bakisYawi + 315) % 360;
-      console.log('[YÖN] Sola döndü. Yeni Açı:', bakisYawi);
-    }
-    if (cleanMsg.includes('!sag')) {
-      bakisYawi = (bakisYawi + 45) % 360;
-      console.log('[YÖN] Sağa döndü. Yeni Açı:', bakisYawi);
-    }
-
     // Farm Başlat
     if (cleanMsg.includes('!farm')) {
       if (vurmaZamani) clearInterval(vurmaZamani);
       console.log('[FARM] Bot kılıç sallamaya başladı.');
 
       vurmaZamani = setInterval(() => {
-        // Gerçek konumu ve yeni açıyı sunucuya basar
-        client.queue('move_player', {
-          runtime_entity_id: client.entityId,
-          position: botPos,
-          pitch: 25,            // Slab altına/huninin üstüne bakış
-          yaw: bakisYawi,       // İstenen yön açısı
-          head_yaw: bakisYawi,
-          mode: 'normal',
-          on_ground: true,
-          riding_entity_runtime_id: 0n,
-          teleport_cause: 0,
-          teleport_source_entity_type: 0
-        });
-
-        client.queue('animate', {
-          action_id: 1,
-          runtime_entity_id: client.entityId
-        });
+        try {
+          if (client) {
+            client.queue('animate', {
+              action_id: 1, // Kılıç sallama
+              runtime_entity_id: client.entityId
+            });
+          }
+        } catch (e) {
+          console.log('[FARM HATA]:', e.message);
+        }
       }, 500);
     }
 
@@ -136,14 +101,14 @@ function startBot() {
 
   client.on('disconnect', () => {
     if (vurmaZamani) { clearInterval(vurmaZamani); vurmaZamani = null; }
-    console.log('[BOT] Baglanti kesildi, tekrar deneniyor...');
-    setTimeout(startBot, 10000);
+    console.log('[BOT] Baglanti kesildi, sunucunun eski oturumu düşürmesi bekleniyor (15sn)...');
+    setTimeout(startBot, 15000); // Sunucunun hayalet oturumu temizlemesi için 15sn bekleme
   });
 
   client.on('error', (err) => {
     if (vurmaZamani) { clearInterval(vurmaZamani); vurmaZamani = null; }
     console.log('[BOT HATA]:', err.message || err);
-    setTimeout(startBot, 10000);
+    setTimeout(startBot, 15000);
   });
 }
 

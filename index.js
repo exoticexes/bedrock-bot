@@ -20,7 +20,7 @@ function startBot() {
     activePlayers.add('Pis_Fakir');
   });
 
-  // Tab listesinden isim yakalama
+  // 1. Tab listesinden isim yakalama (ORİJİNAL KOD - DEĞİŞTİRİLMEDİ)
   client.on('player_list', (packet) => {
     if (!packet.records || !packet.records.records) return;
     packet.records.records.forEach(r => {
@@ -37,13 +37,32 @@ function startBot() {
     });
   });
 
-  // Chat/Sistem bildirimi ve Farm komutları
+  // 2. Chat / Sistem bildiriminden isim yakalama (ORİJİNAL KOD - DEĞİŞTİRİLMEDİ)
   client.on('text', (packet) => {
     const msg = packet.message || '';
-    const lowerMsg = msg.trim().toLowerCase();
     const pName = packet.parameters ? packet.parameters[0] : null;
 
-    // --- FARM KOMUTLARI ---
+    if (pName && pName !== 'Pis_Fakir') {
+      if (msg.includes('joined') || msg.includes('katildi')) {
+        activePlayers.add(pName);
+        console.log('[OYUNCU KATILDI - CHAT]:', pName);
+      }
+      if (msg.includes('left') || msg.includes('ayrildi')) {
+        activePlayers.delete(pName);
+        console.log('[OYUNCU AYRILDI - CHAT]:', pName);
+      }
+    }
+  });
+
+  // 3. Farm Komut Dinleyicisi (!farm ve !dur)
+  client.on('text', (packet) => {
+    let chatContent = packet.message || '';
+    if (packet.parameters && packet.parameters[1]) {
+      chatContent = packet.parameters[1];
+    }
+
+    const lowerMsg = chatContent.trim().toLowerCase();
+
     if (lowerMsg === '!farm') {
       if (vurmaZamani) clearInterval(vurmaZamani);
       console.log('[FARM] Bot kılıç sallamaya başladı.');
@@ -60,18 +79,6 @@ function startBot() {
         clearInterval(vurmaZamani);
         vurmaZamani = null;
         console.log('[FARM] Bot vurmayı durdurdu.');
-      }
-    }
-    // ----------------------
-
-    if (pName && pName !== 'Pis_Fakir') {
-      if (msg.includes('joined') || msg.includes('katildi')) {
-        activePlayers.add(pName);
-        console.log('[OYUNCU KATILDI - CHAT]:', pName);
-      }
-      if (msg.includes('left') || msg.includes('ayrildi')) {
-        activePlayers.delete(pName);
-        console.log('[OYUNCU AYRILDI - CHAT]:', pName);
       }
     }
   });

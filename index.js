@@ -5,9 +5,10 @@ const port = process.env.PORT || 3000;
 
 let activePlayers = new Set(['Pis_Fakir']);
 let vurmaZamani = null;
-let bakisYawi = 0;
-let botPos = { x: 0, y: 0, z: 0 };
 let client = null;
+
+// Radarımız: Etraftaki canavarların ID'lerini tutacak liste
+let hedefler = new Set(); 
 
 function startBot() {
   if (client) {
@@ -26,81 +27,54 @@ function startBot() {
   client.on('join', () => {
     console.log('[BOT] Pis_Fakir oyuna basariyla girdi!');
     activePlayers.add('Pis_Fakir');
+    hedefler.clear(); // Oyuna girince radarı temizle
   });
 
-  // Sunucudan gelen konum paketlerini engelsiz yakalama
-  client.on('move_player', (packet) => {
-    if (packet.position) {
-      botPos = packet.position;
+  // --- RADAR SİSTEMİ BAŞLANGICI ---
+  
+  // 1. Etrafta bir varlık (zombi, iskelet, eşya vb.) doğduğunda radara ekle
+  client.on('add_entity', (packet) => {
+    const entityId = packet.runtime_entity_id || packet.runtime_id;
+    if (entityId) {
+      hedefler.add(entityId);
     }
   });
 
-  client.on('start_game', (packet) => {
-    if (packet.player_position) {
-      botPos = packet.player_position;
+  // 2. Varlık öldüğünde veya çok uzaklaştığında radardan sil
+  client.on('remove_entity', (packet) => {
+    const entityId = packet.entity_id_self || packet.runtime_entity_id;
+    if (entityId) {
+      hedefler.delete(entityId);
     }
   });
 
-  // 1. Tab listesinden oyuncu takibi
+  // --- RADAR SİSTEMİ SONU ---
+
+  // Tab listesinden oyuncu takibi
   client.on('player_list', (packet) => {
     if (!packet.records || !packet.records.records) return;
     packet.records.records.forEach(r => {
       if (r.username && !r.username.startsWith('Pis_Fakir')) {
         if (packet.records.type === 'add') {
           activePlayers.add(r.username);
-          console.log('[OYUNCU KATILDI - TAB]:', r.username);
         }
         if (packet.records.type === 'remove') {
           activePlayers.delete(r.username);
-          console.log('[OYUNCU AYRILDI - TAB]:', r.username);
         }
       }
     });
   });
 
-  // 2. Chat / Sistem bildiriminden oyuncu takibi
+  // Chat / Sistem bildiriminden oyuncu takibi
   client.on('text', (packet) => {
     const msg = packet.message || '';
     const pName = packet.parameters ? packet.parameters[0] : null;
 
     if (pName && !pName.startsWith('Pis_Fakir')) {
-      if (msg.includes('joined') || msg.includes('katildi')) {
-        activePlayers.add(pName);
-        console.log('[OYUNCU KATILDI - CHAT]:', pName);
-      }
-      if (msg.includes('left') || msg.includes('ayrildi')) {
-        activePlayers.delete(pName);
-        console.log('[OYUNCU AYRILDI - CHAT]:', pName);
-      }
+      if (msg.includes('joined') || msg.includes('katildi')) activePlayers.add(pName);
+      if (msg.includes('left') || msg.includes('ayrildi')) activePlayers.delete(pName);
     }
-  });
 
-  // Dönüş Paketi Gönderici
-  function yonDegistir(yeniYaw) {
-    bakisYawi = Number(yeniYaw) % 360;
-    try {
-      if (client) {
-        client.queue('move_player', {
-          runtime_entity_id: client.entityId,
-          position: botPos,
-          pitch: 25,             // Slab/Huni hizasına bakış
-          yaw: bakisYawi,
-          head_yaw: bakisYawi,
-          mode: 'normal',
-          on_ground: true,
-          riding_entity_runtime_id: 0n,
-          teleport_cause: 0,
-          teleport_source_entity_type: 0
-        });
-        console.log(`[YÖN] Bot ${bakisYawi} derece açısına döndürüldü.`);
-      }
-    } catch (e) {
-      console.log('[YÖN HATA]:', e.message);
-    }
-  }
-
-  // 3. Farm ve Yön Komut Dinleyicisi
-  client.on('text', (packet) => {
     let rawText = packet.message || '';
     if (packet.parameters && Array.isArray(packet.parameters)) {
       rawText += ' ' + packet.parameters.join(' ');
@@ -108,36 +82,44 @@ function startBot() {
 
     const cleanMsg = rawText.replace(/§[0-9a-fk-or]/gi, '').toLowerCase();
 
-    // Derece ile Döndürme (!bak 90, !bak 180, !bak 270, !bak 0)
-    if (cleanMsg.includes('!bak')) {
-      const match = cleanMsg.match(/!bak\s*(\d+)/);
-      if (match && match[1]) {
-        yonDegistir(parseInt(match[1]));
-      }
-    }
-
-    // Yön komutları
-    if (cleanMsg.includes('!sol')) yonDegistir(bakisYawi + 270);
-    if (cleanMsg.includes('!sag')) yonDegistir(bakisYawi + 90);
-    if (cleanMsg.includes('!don')) yonDegistir(bakisYawi + 180);
-
     // Farm Başlat
     if (cleanMsg.includes('!farm')) {
       if (vurmaZamani) clearInterval(vurmaZamani);
-      console.log('[FARM] Bot kılıç sallamaya başladı.');
+      console.log('[FARM] Radar aktif! Bot menzilindeki tüm hedeflere saldırıyor.');
 
       vurmaZamani = setInterval(() => {
+        if (!client) return;
+
+        // Görsel olarak kolunu salla (Senin görebilmen için)
         try {
-          if (client) {
-            client.queue('animate', {
-              action_id: 1,
-              runtime_entity_id: client.entityId
-            });
-          }
-        } catch (e) {
-          console.log('[FARM HATA]:', e.message);
+          client.queue('animate', {
+            action_id: 1, 
+            runtime_entity_id: client.entityId
+          });
+        } catch(e) {}
+
+        // Radardaki tüm varlıklara gerçek hasar paketi yolla
+        if (hedefler.size > 0) {
+          hedefler.forEach(hedefID => {
+            try {
+              client.queue('inventory_transaction', {
+                transaction: {
+                  legacy: { legacy_request_id: 0, legacy_transactions: [] },
+                  transaction_type: 'item_use_on_entity',
+                  transaction_data: {
+                    action_type: 'attack',
+                    runtime_entity_id: hedefID,
+                    hotbar_slot: 0, // Elindeki ilk slot
+                    item_in_hand: { network_id: 0 },
+                    player_pos: { x: 0, y: 0, z: 0 },
+                    click_pos: { x: 0, y: 0, z: 0 }
+                  }
+                }
+              });
+            } catch(e) {}
+          });
         }
-      }, 500);
+      }, 500); // Saniyede 2 kere radarı tarar ve vurur
     }
 
     // Farm Durdur

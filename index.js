@@ -3,34 +3,36 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-let activePlayers = new Set(['Pis_Fakir']);
+// Tüm sunucu oyuncularını API için ortak bir yerde tutuyoruz
+let allActivePlayers = new Set();
 
-function startBot() {
-  console.log('[BOT] Baglaniliyor...');
+// BOT FABRİKASI (Her bot kendi ismine ve bağımsız bağlantısına sahip olur)
+function startBot(botAdi) {
+  console.log(`[BOT - ${botAdi}] Baglaniliyor...`);
   const client = bedrock.createClient({
     host: '46.4.101.93',
     port: 27056,
-    username: 'Pis_Fakir',
+    username: botAdi,
     offline: true
   });
 
   client.on('join', () => {
-    console.log('[BOT] Pis_Fakir oyuna basariyla girdi!');
-    activePlayers.add('Pis_Fakir');
+    console.log(`[BOT - ${botAdi}] Oyuna basariyla girdi!`);
+    allActivePlayers.add(botAdi);
   });
 
   // 1. Tab listesinden isim yakalama ve loga basma
   client.on('player_list', (packet) => {
     if (!packet.records || !packet.records.records) return;
     packet.records.records.forEach(r => {
-      if (r.username && r.username !== 'Pis_Fakir') {
+      if (r.username && r.username !== botAdi) {
         if (packet.records.type === 'add') {
-          activePlayers.add(r.username);
-          console.log('[OYUNCU KATILDI - TAB]:', r.username);
+          allActivePlayers.add(r.username);
+          console.log(`[${botAdi} - OYUNCU KATILDI - TAB]:`, r.username);
         }
         if (packet.records.type === 'remove') {
-          activePlayers.delete(r.username);
-          console.log('[OYUNCU AYRILDI - TAB]:', r.username);
+          allActivePlayers.delete(r.username);
+          console.log(`[${botAdi} - OYUNCU AYRILDI - TAB]:`, r.username);
         }
       }
     });
@@ -41,30 +43,32 @@ function startBot() {
     const msg = packet.message || '';
     const pName = packet.parameters ? packet.parameters[0] : null;
 
-    if (pName && pName !== 'Pis_Fakir') {
+    if (pName && pName !== botAdi) {
       if (msg.includes('joined') || msg.includes('katildi')) {
-        activePlayers.add(pName);
-        console.log('[OYUNCU KATILDI - CHAT]:', pName);
+        allActivePlayers.add(pName);
+        console.log(`[${botAdi} - OYUNCU KATILDI - CHAT]:`, pName);
       }
       if (msg.includes('left') || msg.includes('ayrildi')) {
-        activePlayers.delete(pName);
-        console.log('[OYUNCU AYRILDI - CHAT]:', pName);
+        allActivePlayers.delete(pName);
+        console.log(`[${botAdi} - OYUNCU AYRILDI - CHAT]:`, pName);
       }
     }
   });
 
   client.on('disconnect', () => {
-    console.log('[BOT] Baglanti kesildi, tekrar deneniyor...');
-    setTimeout(startBot, 10000);
+    console.log(`[BOT - ${botAdi}] Baglanti kesildi, tekrar deneniyor...`);
+    setTimeout(() => startBot(botAdi), 10000);
   });
 
   client.on('error', (err) => {
-    console.log('[BOT HATA]:', err.message || err);
-    setTimeout(startBot, 10000);
+    console.log(`[BOT HATA - ${botAdi}]:`, err.message || err);
+    setTimeout(() => startBot(botAdi), 10000);
   });
 }
 
-startBot();
+// İKİ BOTU DA AYNI ANDA BAŞLATIYORUZ
+startBot('Pis_Fakir');
+startBot('Zengin');
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -80,12 +84,12 @@ app.get('/api/status', async (req, res) => {
     res.json({
       online: data.online,
       playerCount: count,
-      players: Array.from(activePlayers)
+      players: Array.from(allActivePlayers)
     });
   } catch (err) {
-    res.json({ online: true, playerCount: activePlayers.size, players: Array.from(activePlayers) });
+    res.json({ online: true, playerCount: allActivePlayers.size, players: Array.from(allActivePlayers) });
   }
 });
 
-app.get('/', (req, res) => res.send('API ve Bot Aktif!'));
+app.get('/', (req, res) => res.send('API ve Cift Bot Aktif!'));
 app.listen(port);

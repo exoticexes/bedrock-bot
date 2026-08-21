@@ -6,9 +6,8 @@ const port = process.env.PORT || 3000;
 let activePlayers = new Set(['Pis_Fakir']);
 let vurmaZamani = null;
 let client = null;
-
-// Radarımız: Etraftaki canavarların ID'lerini tutacak liste
 let hedefler = new Set(); 
+let botPos = { x: 0, y: 0, z: 0 }; // Botun gerçek konumu
 
 function startBot() {
   if (client) {
@@ -27,40 +26,41 @@ function startBot() {
   client.on('join', () => {
     console.log('[BOT] Pis_Fakir oyuna basariyla girdi!');
     activePlayers.add('Pis_Fakir');
-    hedefler.clear(); // Oyuna girince radarı temizle
+    hedefler.clear(); 
   });
 
-  // --- RADAR SİSTEMİ BAŞLANGICI ---
-  
-  // 1. Etrafta bir varlık (zombi, iskelet, eşya vb.) doğduğunda radara ekle
+  // SUNUCUDAN GERÇEK KONUMU YAKALAMA (Vuruşun kabul edilmesi için ŞART)
+  client.on('move_player', (packet) => {
+    if (packet.runtime_entity_id === client.entityId && packet.position) {
+      botPos = packet.position;
+    }
+  });
+
+  client.on('start_game', (packet) => {
+    if (packet.player_position) {
+      botPos = packet.player_position;
+    }
+  });
+
+  // RADAR: Etraftaki varlıkları listeye ekle
   client.on('add_entity', (packet) => {
     const entityId = packet.runtime_entity_id || packet.runtime_id;
-    if (entityId) {
-      hedefler.add(entityId);
-    }
+    if (entityId) hedefler.add(entityId);
   });
 
-  // 2. Varlık öldüğünde veya çok uzaklaştığında radardan sil
+  // RADAR: Uzaklaşan/ölen varlıkları listeden sil
   client.on('remove_entity', (packet) => {
     const entityId = packet.entity_id_self || packet.runtime_entity_id;
-    if (entityId) {
-      hedefler.delete(entityId);
-    }
+    if (entityId) hedefler.delete(entityId);
   });
-
-  // --- RADAR SİSTEMİ SONU ---
 
   // Tab listesinden oyuncu takibi
   client.on('player_list', (packet) => {
     if (!packet.records || !packet.records.records) return;
     packet.records.records.forEach(r => {
       if (r.username && !r.username.startsWith('Pis_Fakir')) {
-        if (packet.records.type === 'add') {
-          activePlayers.add(r.username);
-        }
-        if (packet.records.type === 'remove') {
-          activePlayers.delete(r.username);
-        }
+        if (packet.records.type === 'add') activePlayers.add(r.username);
+        if (packet.records.type === 'remove') activePlayers.delete(r.username);
       }
     });
   });
@@ -85,12 +85,12 @@ function startBot() {
     // Farm Başlat
     if (cleanMsg.includes('!farm')) {
       if (vurmaZamani) clearInterval(vurmaZamani);
-      console.log('[FARM] Radar aktif! Bot menzilindeki tüm hedeflere saldırıyor.');
+      console.log('[FARM] Radar aktif! Gerçek konum ile saldırılıyor.');
 
       vurmaZamani = setInterval(() => {
         if (!client) return;
 
-        // Görsel olarak kolunu salla (Senin görebilmen için)
+        // Görsel animasyon (Kol sallama)
         try {
           client.queue('animate', {
             action_id: 1, 
@@ -98,8 +98,8 @@ function startBot() {
           });
         } catch(e) {}
 
-        // Radardaki tüm varlıklara gerçek hasar paketi yolla
-        if (hedefler.size > 0) {
+        // Eğer bot konumu aldıysa hedeflere vur
+        if (hedefler.size > 0 && botPos.x !== 0) {
           hedefler.forEach(hedefID => {
             try {
               client.queue('inventory_transaction', {
@@ -109,17 +109,17 @@ function startBot() {
                   transaction_data: {
                     action_type: 'attack',
                     runtime_entity_id: hedefID,
-                    hotbar_slot: 0, // Elindeki ilk slot
+                    hotbar_slot: 0,
                     item_in_hand: { network_id: 0 },
-                    player_pos: { x: 0, y: 0, z: 0 },
-                    click_pos: { x: 0, y: 0, z: 0 }
+                    player_pos: botPos, // Hile korumasını aşmak için gerçek koordinat
+                    click_pos: botPos   
                   }
                 }
               });
             } catch(e) {}
           });
         }
-      }, 500); // Saniyede 2 kere radarı tarar ve vurur
+      }, 500); 
     }
 
     // Farm Durdur

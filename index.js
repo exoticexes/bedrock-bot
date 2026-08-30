@@ -13,7 +13,8 @@ function startBot(botAdi) {
     host: '46.4.101.93',
     port: 27056,
     username: botAdi,
-    offline: true
+    offline: true,
+    skipPing: false // Sunucuya ping atarak güncel protokol sürümünü otomatik algılar
   });
 
   client.on('join', () => {
@@ -55,8 +56,8 @@ function startBot(botAdi) {
     }
   });
 
-  client.on('disconnect', () => {
-    console.log(`[BOT - ${botAdi}] Baglanti kesildi, tekrar deneniyor...`);
+  client.on('disconnect', (packet) => {
+    console.log(`[BOT - ${botAdi}] Baglanti kesildi (${packet?.reason || 'Sebep belirtilmedi'}), tekrar deneniyor...`);
     setTimeout(() => startBot(botAdi), 10000);
   });
 

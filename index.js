@@ -14,7 +14,7 @@ function startBot(botAdi) {
     port: 27056,
     username: botAdi,
     offline: true,
-    skipPing: false // Sunucuya ping atarak güncel protokol sürümünü otomatik algılar
+    version: '1.26.45' // Loglarda görünen sunucu sürümüyle birebir eşitledik
   });
 
   client.on('join', () => {

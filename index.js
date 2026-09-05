@@ -3,18 +3,17 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Tüm sunucu oyuncularını API için ortak bir yerde tutuyoruz
+// TÃ¼m sunucu oyuncularÄ±nÄ± API iÃ§in ortak bir yerde tutuyoruz
 let allActivePlayers = new Set();
 
-// BOT FABRİKASI (Her bot kendi ismine ve bağımsız bağlantısına sahip olur)
+// BOT FABRÄ°KASI (Her bot kendi ismine ve baÄŸÄ±msÄ±z baÄŸlantÄ±sÄ±na sahip olur)
 function startBot(botAdi) {
   console.log(`[BOT - ${botAdi}] Baglaniliyor...`);
   const client = bedrock.createClient({
     host: '46.4.101.93',
     port: 27056,
     username: botAdi,
-    offline: true,
-    version: '1.26.45' // Loglarda görünen sunucu sürümüyle birebir eşitledik
+    offline: true
   });
 
   client.on('join', () => {
@@ -56,8 +55,8 @@ function startBot(botAdi) {
     }
   });
 
-  client.on('disconnect', (packet) => {
-    console.log(`[BOT - ${botAdi}] Baglanti kesildi (${packet?.reason || 'Sebep belirtilmedi'}), tekrar deneniyor...`);
+  client.on('disconnect', () => {
+    console.log(`[BOT - ${botAdi}] Baglanti kesildi, tekrar deneniyor...`);
     setTimeout(() => startBot(botAdi), 10000);
   });
 
@@ -67,7 +66,7 @@ function startBot(botAdi) {
   });
 }
 
-// İKİ BOTU DA AYNI ANDA BAŞLATIYORUZ
+// Ä°KÄ° BOTU DA AYNI ANDA BAÅžLATIYORUZ
 startBot('Pis_Fakir');
 startBot('Zengin');
 

@@ -23,7 +23,6 @@ function startBot(botAdi) {
       port: 27056,
       username: botAdi,
       offline: true,
-      version: '1.26.45',
       skipPing: true
     });
 

@@ -1,19 +1,3 @@
-const bedrock = require('bedrock-protocol');
-const express = require('express');
-const app = express();
-const port = process.env.PORT || 3000;
-
-// Uygulamanın anında çökmesini engellemek için genel hata yakalayıcılar
-process.on('uncaughtException', (err) => {
-  console.error('[GENEL HATA]:', err.message || err);
-});
-
-process.on('unhandledRejection', (reason) => {
-  console.error('[SÖZDİRİM HATASI]:', reason);
-});
-
-let allActivePlayers = new Set();
-
 function startBot(botAdi) {
   console.log(`[BOT - ${botAdi}] Baglaniliyor...`);
   
@@ -24,6 +8,7 @@ function startBot(botAdi) {
       username: botAdi,
       offline: true,
       skipPing: true
+      // version satırı tamamen kaldırıldı
     });
 
     client.on('join', () => {
@@ -66,31 +51,3 @@ function startBot(botAdi) {
     setTimeout(() => startBot(botAdi), 10000);
   }
 }
-
-startBot('Pis_Fakir');
-startBot('Zengin');
-
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  next();
-});
-
-app.get('/api/status', async (req, res) => {
-  try {
-    const response = await fetch('https://api.mcstatus.io/v2/status/bedrock/46.4.101.93:27056');
-    const data = await response.json();
-    const count = data.online ? data.players.online : 0;
-
-    res.json({
-      online: data.online,
-      playerCount: count,
-      players: Array.from(allActivePlayers)
-    });
-  } catch (err) {
-    res.json({ online: true, playerCount: allActivePlayers.size, players: Array.from(allActivePlayers) });
-  }
-});
-
-app.get('/', (req, res) => res.send('API ve Cift Bot Aktif!'));
-
-app.listen(port, () => console.log(`Sunucu ${port} portunda baslatildi.`));

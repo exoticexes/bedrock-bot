@@ -6,7 +6,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "bedrock-protocol": "github:PrismarineJS/bedrock-protocol",
+    "bedrock-protocol": "latest",
     "express": "^4.19.2"
   }
 }

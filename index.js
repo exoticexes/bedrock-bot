@@ -3,72 +3,71 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Tüm sunucu oyuncularını API için ortak bir yerde tutuyoruz
+// Uygulamanın anında çökmesini engellemek için genel hata yakalayıcılar
+process.on('uncaughtException', (err) => {
+  console.error('[GENEL HATA]:', err.message || err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[SÖZDİRİM HATASI]:', reason);
+});
+
 let allActivePlayers = new Set();
 
-// BOT FABRİKASI (Her bot kendi ismine ve bağımsız bağlantısına sahip olur)
 function startBot(botAdi) {
   console.log(`[BOT - ${botAdi}] Baglaniliyor...`);
-  const client = bedrock.createClient({
-    host: '46.4.101.93',
-    port: 27056,
-    username: botAdi,
-    offline: true,
-    version: '1.26.45',
-    skipPing: true // Ping zaman aşımına takılmadan doğrudan sunucuya bağlanmayı sağlar
-  });
+  
+  try {
+    const client = bedrock.createClient({
+      host: '46.4.101.93',
+      port: 27056,
+      username: botAdi,
+      offline: true,
+      version: '1.26.45',
+      skipPing: true
+    });
 
-  client.on('join', () => {
-    console.log(`[BOT - ${botAdi}] Oyuna basariyla girdi!`);
-    allActivePlayers.add(botAdi);
-  });
+    client.on('join', () => {
+      console.log(`[BOT - ${botAdi}] Oyuna basariyla girdi!`);
+      allActivePlayers.add(botAdi);
+    });
 
-  // 1. Tab listesinden isim yakalama ve loga basma
-  client.on('player_list', (packet) => {
-    if (!packet.records || !packet.records.records) return;
-    packet.records.records.forEach(r => {
-      if (r.username && r.username !== botAdi) {
-        if (packet.records.type === 'add') {
-          allActivePlayers.add(r.username);
-          console.log(`[${botAdi} - OYUNCU KATILDI - TAB]:`, r.username);
+    client.on('player_list', (packet) => {
+      if (!packet.records || !packet.records.records) return;
+      packet.records.records.forEach(r => {
+        if (r.username && r.username !== botAdi) {
+          if (packet.records.type === 'add') allActivePlayers.add(r.username);
+          if (packet.records.type === 'remove') allActivePlayers.delete(r.username);
         }
-        if (packet.records.type === 'remove') {
-          allActivePlayers.delete(r.username);
-          console.log(`[${botAdi} - OYUNCU AYRILDI - TAB]:`, r.username);
-        }
+      });
+    });
+
+    client.on('text', (packet) => {
+      const msg = packet.message || '';
+      const pName = packet.parameters ? packet.parameters[0] : null;
+
+      if (pName && pName !== botAdi) {
+        if (msg.includes('joined') || msg.includes('katildi')) allActivePlayers.add(pName);
+        if (msg.includes('left') || msg.includes('ayrildi')) allActivePlayers.delete(pName);
       }
     });
-  });
 
-  // 2. Chat / Sistem bildiriminden isim yakalama ve loga basma
-  client.on('text', (packet) => {
-    const msg = packet.message || '';
-    const pName = packet.parameters ? packet.parameters[0] : null;
+    client.on('disconnect', (packet) => {
+      console.log(`[BOT - ${botAdi}] Baglanti kesildi (${packet?.reason || 'Sebep yok'}), tekrar deneniyor...`);
+      setTimeout(() => startBot(botAdi), 10000);
+    });
 
-    if (pName && pName !== botAdi) {
-      if (msg.includes('joined') || msg.includes('katildi')) {
-        allActivePlayers.add(pName);
-        console.log(`[${botAdi} - OYUNCU KATILDI - CHAT]:`, pName);
-      }
-      if (msg.includes('left') || msg.includes('ayrildi')) {
-        allActivePlayers.delete(pName);
-        console.log(`[${botAdi} - OYUNCU AYRILDI - CHAT]:`, pName);
-      }
-    }
-  });
+    client.on('error', (err) => {
+      console.log(`[BOT HATA - ${botAdi}]:`, err.message || err);
+      setTimeout(() => startBot(botAdi), 10000);
+    });
 
-  client.on('disconnect', (packet) => {
-    console.log(`[BOT - ${botAdi}] Baglanti kesildi (${packet?.reason || 'Sebep belirtilmedi'}), tekrar deneniyor...`);
+  } catch (e) {
+    console.error(`[BOT BASLATMA HATASI - ${botAdi}]:`, e.message);
     setTimeout(() => startBot(botAdi), 10000);
-  });
-
-  client.on('error', (err) => {
-    console.log(`[BOT HATA - ${botAdi}]:`, err.message || err);
-    setTimeout(() => startBot(botAdi), 10000);
-  });
+  }
 }
 
-// İKİ BOTU DA AYNI ANDA BAŞLATIYORUZ
 startBot('Pis_Fakir');
 startBot('Zengin');
 
@@ -94,4 +93,5 @@ app.get('/api/status', async (req, res) => {
 });
 
 app.get('/', (req, res) => res.send('API ve Cift Bot Aktif!'));
-app.listen(port);
+
+app.listen(port, () => console.log(`Sunucu ${port} portunda baslatildi.`));

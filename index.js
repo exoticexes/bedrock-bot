@@ -13,8 +13,9 @@ function startBot(botAdi) {
     port: 27056,
     username: botAdi,
     offline: true,
-    version: '1.21.20', // Sunucunun el sıkışma paketini kabul edebileceği alternatif protokol
-    skipPing: false
+    skipPing: true,             // Ping bekleme hatasını engeller
+    version: '1.21.50',         // Kütüphanenin kabul ettiği protokol sürümü
+    connectTimeout: 30000       // Sunucu yanıtı için zaman aşımını 30 saniyeye çıkarır
   });
 
   client.on('join', () => {
@@ -45,22 +46,22 @@ function startBot(botAdi) {
   });
 
   client.on('disconnect', () => {
-    console.log(`[BOT - ${botAdi}] Baglanti kesildi, 15sn sonra tekrar deneniyor...`);
-    setTimeout(() => startBot(botAdi), 15000);
+    console.log(`[BOT - ${botAdi}] Baglanti kesildi, 10sn sonra tekrar deneniyor...`);
+    setTimeout(() => startBot(botAdi), 10000);
   });
 
   client.on('error', (err) => {
     console.log(`[BOT HATA - ${botAdi}]:`, err.message || err);
-    setTimeout(() => startBot(botAdi), 15000);
+    setTimeout(() => startBot(botAdi), 10000);
   });
 }
 
-// Botların aynı anda girip portu kilitlemesini önlemek için 5 saniye arayla başlatıyoruz
+// Botları 3 saniye arayla güvenli başlatıyoruz
 startBot('Pis_Fakir');
 
 setTimeout(() => {
   startBot('Zengin');
-}, 5000);
+}, 3000);
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');

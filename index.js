@@ -13,9 +13,7 @@ function startBot(botAdi) {
     port: 27056,
     username: botAdi,
     offline: true,
-    skipPing: true,             // Ping bekleme hatasını engeller
-    version: '1.21.50',         // Kütüphanenin kabul ettiği protokol sürümü
-    connectTimeout: 30000       // Sunucu yanıtı için zaman aşımını 30 saniyeye çıkarır
+    skipPing: true
   });
 
   client.on('join', () => {
@@ -56,12 +54,12 @@ function startBot(botAdi) {
   });
 }
 
-// Botları 3 saniye arayla güvenli başlatıyoruz
+// Botları 4 saniye arayla güvenli bir şekilde başlatıyoruz
 startBot('Pis_Fakir');
 
 setTimeout(() => {
   startBot('Zengin');
-}, 3000);
+}, 4000);
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');

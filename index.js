@@ -13,9 +13,8 @@ function startBot(botAdi) {
     port: 27056,
     username: botAdi,
     offline: true,
-    // kütüphanenin 'Unsupported version' hatası vermesini engellemek için geçerli bir sürüm belirtiyoruz
-    version: '1.21.50',
-    skipPing: true
+    version: '1.21.20', // Sunucunun el sıkışma paketini kabul edebileceği alternatif protokol
+    skipPing: false
   });
 
   client.on('join', () => {
@@ -56,9 +55,12 @@ function startBot(botAdi) {
   });
 }
 
-// Botları başlatıyoruz
+// Botların aynı anda girip portu kilitlemesini önlemek için 5 saniye arayla başlatıyoruz
 startBot('Pis_Fakir');
-startBot('Zengin');
+
+setTimeout(() => {
+  startBot('Zengin');
+}, 5000);
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');

@@ -1,12 +1,13 @@
 {
-  "name": "bedrock-afk-bot",
+  "name": "minecraft-bot",
   "version": "1.0.0",
+  "description": "Bedrock AFK Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "bedrock-protocol": "github:PrismarineJS/bedrock-protocol",
+    "bedrock-protocol": "latest",
     "express": "^4.19.2"
   }
 }

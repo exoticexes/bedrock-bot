@@ -13,7 +13,9 @@ function startBot(botAdi) {
     port: 27056,
     username: botAdi,
     offline: true,
-    skipPing: true // Ping kontrolünü atlayıp doğrudan sunucuya baglanir
+    // kütüphanenin 'Unsupported version' hatası vermesini engellemek için geçerli bir sürüm belirtiyoruz
+    version: '1.21.50',
+    skipPing: true
   });
 
   client.on('join', () => {
@@ -54,7 +56,7 @@ function startBot(botAdi) {
   });
 }
 
-// İki botu da baslatiyoruz
+// Botları başlatıyoruz
 startBot('Pis_Fakir');
 startBot('Zengin');
 
